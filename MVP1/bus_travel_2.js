@@ -12,6 +12,12 @@ function queryUrl(startTime, endTime, route){
           endTime
           routes {
             rid
+            stops {
+              sid
+              name
+              lat
+              lon
+            }
             routeStates {
               vtime
               vehicles {
@@ -25,20 +31,32 @@ function queryUrl(startTime, endTime, route){
       }`.split('{').join('%7B').split('}').join('%7D');
 }
 var busUrl = queryUrl(1539696442179,1539696599179,14);
+var routesUrl = 'https://raw.githubusercontent.com/trynmaps/opentransit-map/master/src/res/muniRoutes2.json';
 
 var busLayer = L.layerGroup();
+var stopLayer = L.layerGroup();
+var routeLine = L.layerGroup();
 // var streetmap = L.tileLayer('https://b.tile.openstreetmap.org/{z}/{x}/{y}.png');
 var streetmap = L.tileLayer('https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png');
 var busDots = {};
 var busKeys = {};
+var routePaths = {};
 var route;
 var t0;
+
+d3.json(routesUrl,response=>{
+    for (let r of response.features){
+        routePaths[r.properties.name] = r;
+    }
+});
 
 function loadBus(startTime, endTime, route){
     busUrl = queryUrl(startTime,endTime,route);
     d3.json(busUrl,(response)=>{
         // console.log(response);
-        route = response.data.trynState.routes[0].routeStates;
+        let routeObj = response.data.trynState.routes[0];
+        route = routeObj.routeStates;
+        let stops = routeObj.stops;
         // console.log(route[0].vehicles[0]);
         route.sort((t1,t2)=>(+t1.vtime-+t2.vtime));
 
@@ -48,6 +66,8 @@ function loadBus(startTime, endTime, route){
             return (+t-tMin)/15000;
         }
         busLayer.clearLayers();
+        stopLayer.clearLayers();
+        routeLine.clearLayers();
         busKeys = {};
         busDots = {};
         // Generate bus keyframes
@@ -56,6 +76,11 @@ function loadBus(startTime, endTime, route){
             for (let v of rs.vehicles){
                 if (!(v.vid in busKeys)) {
                     busKeys[v.vid]=[];
+                    // Add circles
+                    let c = L.circle([v.lat,v.lon],
+                        {color: 'black'});
+                    c.addTo(busLayer);
+                    busDots[v.vid]=c;
                 }
 
                 let bk = busKeys[v.vid];
@@ -69,14 +94,19 @@ function loadBus(startTime, endTime, route){
                 bk.push([timeTransform(rs.vtime),lon1,lat1]);
             }
         }
-        // console.log(timeTransform(route[3].vtime));
 
-        for (let v of route[0].vehicles){
-            let c = L.circle([v.lat,v.lon],
-                {color: 'black'});
-            c.addTo(busLayer);
-            busDots[v.vid]=c;
+        for (let s of stops){
+            L.circle([s.lat,s.lon],
+                {color: 'blue',
+                radius: 5,
+                weight: 1}
+            ).addTo(stopLayer);
         }
+        L.geoJSON(routePaths[routeObj.rid],{
+            weight: 1.5,
+            opacity: .5,
+            color: 'red',
+        }).addTo(routeLine);
         t0 = Date.now();
     });
 }
@@ -84,11 +114,13 @@ loadBus(1539696442179,1539696599179,14);
 
 // Map layers
 var baseMaps = {
-  "Light Map": streetmap,
+    "Light Map": streetmap,
 };
 
 var overlayMaps = {
-  "Buses": busLayer,
+    "Route": routeLine,
+    "Buses": busLayer,
+    "Stops": stopLayer,
 };
 
 var map = L.map("map", {
@@ -96,7 +128,7 @@ var map = L.map("map", {
       37.78, -122.44
     ],
     zoom: 13,
-    layers: [streetmap, busLayer]
+    layers: [streetmap, routeLine, stopLayer, busLayer]
 });
 
 function updateBuses(){
@@ -151,7 +183,7 @@ function arrayLerp(a1, a2, t){
     return a1.map((d,i)=>lerp(d, a2[i], t));
 }
 
-// L.control.layers(baseMaps,overlayMaps,{collapsed: false}).addTo(map);
+L.control.layers(baseMaps,overlayMaps,{collapsed: false}).addTo(map);
 
 /*
 var count = 0;
