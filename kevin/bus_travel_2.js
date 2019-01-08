@@ -57,9 +57,13 @@ d3.json(routesUrl,response=>{
 
 function loadBus(startTime, endTime, route, dedupKeys=false){
     busUrl = queryUrl(startTime,endTime,route);
-    d3.json(busUrl,(response)=>{
+    d3.json(busUrl,(error, response)=>{
         // console.log(response);
         let routeObj = response.data.trynState.routes[0];
+        if (!routeObj) {
+            return console.warn('Query did not return any routes');
+        }
+
         route = routeObj.routeStates;
         let stops = routeObj.stops;
         // console.log(route[0].vehicles[0]);
@@ -85,6 +89,7 @@ function loadBus(startTime, endTime, route, dedupKeys=false){
                     // Add circles
                     let c = L.circle([v.lat,v.lon],
                         {color: 'black'});
+                    c.bindPopup(`<p>Bus # ${v.vid}</p>`)
                     c.addTo(busLayer);
                     busDots[v.vid]=c;
                 }
@@ -106,13 +111,15 @@ function loadBus(startTime, endTime, route, dedupKeys=false){
                 {color: 'blue',
                 radius: 5,
                 weight: 1}
-            ).addTo(stopLayer);
+            ).addTo(stopLayer)
+            .bindPopup(`<p>${s.name}</p>`);
         }
         L.geoJSON(routePaths[routeObj.rid],{
             weight: 1.5,
             opacity: .5,
             color: 'red',
-        }).addTo(routeLine);
+        }).addTo(routeLine)
+        .bindPopup(`<p>Route ${routeObj.rid}</p>`);
         t0 = Date.now();
     });
 }
@@ -153,7 +160,7 @@ function updateBuses(){
     if (looping && time > animLength) t0 = Date.now();
 }
 
-setInterval(updateBuses,30);
+setInterval(updateBuses,10);
 
 // @CutnPaste from motion_trails1.js
 const T_EPSILON = 1e-8;
