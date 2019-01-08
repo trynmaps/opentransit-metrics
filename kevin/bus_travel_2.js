@@ -44,13 +44,18 @@ var routePaths = {};
 var route;
 var t0;
 
+var animLength = 10;
+
+var speedFactor = 15;
+var looping = false;
+
 d3.json(routesUrl,response=>{
     for (let r of response.features){
         routePaths[r.properties.name] = r;
     }
 });
 
-function loadBus(startTime, endTime, route){
+function loadBus(startTime, endTime, route, dedupKeys=false){
     busUrl = queryUrl(startTime,endTime,route);
     d3.json(busUrl,(response)=>{
         // console.log(response);
@@ -60,6 +65,7 @@ function loadBus(startTime, endTime, route){
         // console.log(route[0].vehicles[0]);
         route.sort((t1,t2)=>(+t1.vtime-+t2.vtime));
 
+        animLength = route.length;
         let tMin = d3.min(route,d=>+d.vtime);
 
         function timeTransform(t){
@@ -88,7 +94,7 @@ function loadBus(startTime, endTime, route){
                 let [lon1,lat1] = [+v.lon, +v.lat];
                 if (bk.length>=1) {
                     let [t,lon0,lat0] = bk[bk.length-1];
-                    if (lon0==lon1 && lat0==lat1) continue;
+                    if (dedupKeys && lon0==lon1 && lat0==lat1) continue;
                 }
 
                 bk.push([timeTransform(rs.vtime),lon1,lat1]);
@@ -112,6 +118,10 @@ function loadBus(startTime, endTime, route){
 }
 loadBus(1539696442179,1539696599179,14);
 
+function resetTime(){
+    t0 = Date.now();
+}
+
 // Map layers
 var baseMaps = {
     "Light Map": streetmap,
@@ -132,13 +142,15 @@ var map = L.map("map", {
 });
 
 function updateBuses(){
-    let time = (Date.now()-t0)*1e-3;
+    let time = (Date.now()-t0)*1e-3*speedFactor/15;
     
     for (let vid in busKeys){
         let c = busDots[vid];
         let [lon,lat] = keyPath(busKeys[vid],time);
         c.setLatLng(new L.LatLng(lat,lon));
     }
+    
+    if (looping && time > animLength) t0 = Date.now();
 }
 
 setInterval(updateBuses,30);
