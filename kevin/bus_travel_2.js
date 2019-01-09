@@ -49,14 +49,62 @@ var animLength = 10;
 var speedFactor = 15;
 var looping = false;
 
+var queryStartTime = 1539696442179;
+var queryEndTime = 1539696599179;
+
 d3.json(routesUrl,response=>{
     for (let r of response.features){
         routePaths[r.properties.name] = r;
     }
+    // Add route dropdown
+    var dropdown = L.control({position:'bottomright'});
+    dropdown.onAdd = map =>{
+        var div = L.DomUtil.create('div','info legend');
+        var $div = d3.select(div);
+        $div.style('margin-bottom','10px');
+
+        $div.append('p').attr('id','query-date')
+            .style('font-weight','normal')
+            .style('margin-top','5px')
+            .style('margin-bottom','5px');
+
+        $routeDiv=$div.append('div').text('Route: ');
+
+        $routeDiv.append('select').selectAll('option')
+            .data(Object.keys(routePaths))
+            .enter().append('option')
+            .attr('id',d=>'route'+d)
+            .text(d=>d);
+
+        $div.select('#route14').attr('selected','selected');
+        var routeSelect = div.getElementsByTagName('select')[0];
+
+        $routeDiv.append('button')
+            .attr('type','button').text('Submit')
+            .on('mouseup',()=>{
+                let rid = routeSelect.options[routeSelect.selectedIndex].value;
+                let params = [queryStartTime,queryEndTime,rid];
+                loadBus(...params);
+            });
+        L.DomEvent.on(div, 'mousedown', e=>L.DomEvent.stopPropagation(e))
+        // div.onmousedown = L.DomEvent.stopPropagation;
+        
+        return div;
+    };
+    dropdown.addTo(map);
+    newQueryDates();
 });
+
+function newQueryDates(){
+    d3.select('#query-date')
+        .html(`<b>Start:</b> ${new Date(queryStartTime).toLocaleString()} <br/>` +
+        `<b>End:</b> ${new Date(queryEndTime).toLocaleString()} <br/>`);
+}
 
 function loadBus(startTime, endTime, route, dedupKeys=false){
     busUrl = queryUrl(startTime,endTime,route);
+    queryStartTime = startTime;
+    queryEndTime = endTime;
     d3.json(busUrl,(error, response)=>{
         // console.log(response);
         let routeObj = response.data.trynState.routes[0];
@@ -120,6 +168,7 @@ function loadBus(startTime, endTime, route, dedupKeys=false){
             color: 'red',
         }).addTo(routeLine)
         .bindPopup(`<p>Route ${routeObj.rid}</p>`);
+        newQueryDates();
         t0 = Date.now();
     });
 }
