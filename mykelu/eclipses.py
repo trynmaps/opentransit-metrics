@@ -83,6 +83,22 @@ def produce_buses(data: list) -> pd.DataFrame:
                              'routeStates.vtime': 'TIME'}) \
             .reindex(['TIME', 'VID', 'LAT', 'LON', 'DID'], axis='columns')
 
+# haversine formula for calcuating distance between two coordinates in lat lon
+# from bird eye view; seems to be +- 8 meters difference from geopy distance
+def haver_distance(latstop,lonstop,latbus,lonbus):
+
+    latstop,lonstop,latbus,lonbus = map(np.deg2rad,[latstop,lonstop,latbus,lonbus])
+    eradius = 6371000
+    
+    latdiff = (latbus-latstop)
+    londiff = (lonbus-lonstop)
+    
+    a = np.sin(latdiff/2)**2 + np.cos(latstop)*np.cos(latbus)*np.sin(londiff/2)**2
+    c = 2*np.arctan2(np.sqrt(a),np.sqrt(1-a))
+    
+    distance = eradius*c
+    return distance
+
 def find_eclipses(buses, stop):
     """
     Find movement of buses relative to the stop, in distance as a function of time.
@@ -92,10 +108,13 @@ def find_eclipses(buses, stop):
         Split buses' movements when they return to a stop after completing the route.
         """
         disjoint_eclipses = []
-        for bus_id in eclipses['VID'].unique():
-            # obtain distance data for this bus
+        for bus_id in eclipses['VID'].unique(): # list of unique VID's
+            # obtain distance data for this one bus
             bus = eclipses[eclipses['VID'] == bus_id].sort_values('TIME')
-
+            #pprint.pprint(bus)
+            #pprint.pprint(bus['TIME'].shift())
+            #pprint.pprint(bus['TIME'].shift() + threshold)
+            #print('===============')
             # split data into groups when there is at least a `threshold`-ms gap between data points
             group_ids = (bus['TIME'] > (bus['TIME'].shift() + threshold)).cumsum()
 
@@ -105,15 +124,34 @@ def find_eclipses(buses, stop):
         return disjoint_eclipses
 
     eclipses = buses.copy()
+    #eclipses['DIST'] = eclipses.apply(lambda row: distance(stop[['LAT','LON']],row[['LAT','LON']]).meters,axis=1)
     
-    eclipses['DIST'] = eclipses.apply(lambda bus: distance(stop[['LAT', 'LON']],
-                                                           bus[['LAT', 'LON']]).meters,
-                                      axis='columns')
+    stopcord = stop[['LAT', 'LON']]
+    buscord = eclipses[['LAT', 'LON']]
+
+    # calculate distances fast with haversine function 
+    eclipses['DIST'] = haver_distance(stopcord['LAT'],stopcord['LON'],buscord['LAT'],buscord['LON'])
+    # only keep positions within 750 meters within the given stop; (filtering out)
+    eclipses = eclipses[eclipses['DIST'] < 750]
+    
+    # update the coordinates list 
+    stopcord = stop[['LAT', 'LON']].values
+    buscord = eclipses[['LAT', 'LON']].values
+    
+    # calculate distances again using geopy for the distance<750m values, because geopy is probably more accurate
+    dfromstop = []
+    for row in buscord:
+        busdistance = distance(stopcord,row).meters
+        dfromstop.append(busdistance)
+    eclipses['DIST'] = dfromstop
+    
+    # for haversine function:
+    #stopcord = stop[['LAT', 'LON']]
+    #buscord = eclipses[['LAT', 'LON']]
+    #eclipses['DIST'] = haver_distance(stopcord['LAT'],stopcord['LON'],buscord['LAT'],buscord['LON'])
+    
     eclipses['TIME'] = eclipses['TIME'].astype(np.int64)
     eclipses = eclipses[['TIME', 'VID', 'DIST']]
-    
-    # only keep positions within 750 meters
-    eclipses = eclipses[eclipses['DIST'] < 750]
     
     eclipses = split_eclipses(eclipses)
     
