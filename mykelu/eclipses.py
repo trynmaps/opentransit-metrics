@@ -62,13 +62,14 @@ def produce_stops(data: list, route: str) -> pd.DataFrame:
     # remove stops that don't have an associated direction
     stops = stops.dropna(axis='index', subset=['DID'])
     
+    # print request status for debugging
+    request = requests.get(f"http://restbus.info/api/agencies/sf-muni/routes/{route}")
+    print(request)
+
     # obtain stop ordinals
     stops['ORD'] = stops['SID'].map({stop_meta['id']: ordinal
                                      for ordinal, stop_meta
-                                     in enumerate(requests
-                                                  .get("http://restbus.info/api/agencies/sf-muni/"
-                                                       f"routes/{route}")
-                                                  .json()['stops'])})
+                                     in enumerate(request.json()['stops'])})
     
     return stops
 

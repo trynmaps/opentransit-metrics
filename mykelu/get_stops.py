@@ -36,7 +36,7 @@ def get_stops(dates, routes, directions = [], new_stops = [], timespan = ("00:00
     for route in routes:
         stop_ids = [stop['id']
             for stop
-            in requests.get(f"http://restbus.info/api/agencies/sf-muni/routes/{route}").json()['stops']][2:4]
+            in requests.get(f"http://restbus.info/api/agencies/sf-muni/routes/{route}").json()['stops']]
 
         for stop_id in stop_ids:
             # check if stops to filter were provided, or if the stop_id is in the list of filtered stops
