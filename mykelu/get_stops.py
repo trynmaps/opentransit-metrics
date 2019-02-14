@@ -4,7 +4,7 @@ import requests
 from datetime import datetime, timedelta, timezone, time, date
 from itertools import product
 from functools import reduce
-from eclipses import query_graphql, produce_stops, produce_buses, find_eclipses, find_nadirs
+from .eclipses import query_graphql, produce_buses, produce_stops, find_eclipses, find_nadirs
 
 import pandas as pd
 import numpy as np
@@ -42,34 +42,34 @@ def get_stops(dates, routes, directions = [], new_stops = [], timespan = ("00:00
             # check if stops to filter were provided, or if the stop_id is in the list of filtered stops
             if (stop_id in new_stops) ^ (len(new_stops) == 0):
                 for date in dates:
-                    print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: starting processing on stop {stop_id} on route {route} on {date}.")
+                    #print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: starting processing on stop {stop_id} on route {route} on {date}.")
                     start_time = int(datetime.strptime(f"{date} {timespan[0]} -0800", "%Y-%m-%d %H:%M %z").timestamp())*1000
                     end_time   = int(datetime.strptime(f"{date} {timespan[1]} -0800", "%Y-%m-%d %H:%M %z").timestamp())*1000
 
                     data = query_graphql(start_time, end_time, route)
-                    print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: performed query.")
+                    #print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: performed query.")
                           
                     if data is None:  # API might refuse to cooperate
                         print("API probably timed out")
                         continue
                     elif len(data) == 0:  # some days somehow have no data
-                        print(f"no data for {month}/{day}")
+                        print(f"no data for {date}")
                         continue
                     else:
                         stops = produce_stops(data, route)
-                        print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: produced stops.")
+                        #print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: produced stops.")
                               
                         buses = produce_buses(data)
-                        print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: produced buses.")
+                        #print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: produced buses.")
 
                         stop = stops[stops['SID'] == stop_id].squeeze()
                         buses = buses[buses['DID'] == stop['DID']]
 
                         eclipses = find_eclipses(buses, stop)
-                        print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: found eclipses.")
+                        #print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: found eclipses.")
                               
                         nadirs = find_nadirs(eclipses)
-                        print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: found nadirs.")
+                        #print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: found nadirs.")
                             
                         nadirs["TIME"] = nadirs["TIME"].apply(lambda x: datetime.fromtimestamp(x//1000, timezone(timedelta(hours = -8))))
                         nadirs['DATE'] = nadirs['TIME'].apply(lambda x: x.date())
@@ -78,7 +78,7 @@ def get_stops(dates, routes, directions = [], new_stops = [], timespan = ("00:00
                         nadirs["DID"] = stop["DID"]
                         nadirs["ROUTE"] = route
                         bus_stops = bus_stops.append(nadirs, sort = True)
-                        print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: finished processing.")
+                        #print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: finished processing.")
 
     # filter for directions
     if len(directions) > 0:
@@ -110,16 +110,16 @@ def minimum_waiting_times(df, start_time, end_time, group):
         
     return wait_times
 
-def all_wait_times(df, timespan, group, aggfuncs):
+def all_wait_times(df, timespan, group):
     dates = df['DATE'].unique()
     avg_over_pd = pd.DataFrame(columns = group + ['DATE', 'TIME', 'WAIT'])
     
-    for date in new_stops['DATE'].unique():
-        print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: start processing {date}.")
+    for date in dates:
+        #print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: start processing {date}.")
         start_time = datetime.strptime(f"{date.isoformat()} {timespan[0]} -0800", "%Y-%m-%d %H:%M %z")
         end_time   = datetime.strptime(f"{date.isoformat()} {timespan[1]} -0800", "%Y-%m-%d %H:%M %z")
-        daily_wait = minimum_waiting_times(new_stops[new_stops['DATE'] == date], start_time, end_time, group)
-        print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: found stops for {date}.")      
+        daily_wait = minimum_waiting_times(df[df['DATE'] == date], start_time, end_time, group)
+        #print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: found waits for {date}.")      
         #daily_wait = daily_wait.pivot_table(values = ['WAIT'], index = group).reset_index()
         daily_wait['DATE'] = date
         daily_wait['TIME'] = daily_wait['TIME'].apply(lambda x: x.time())

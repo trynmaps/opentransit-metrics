@@ -2,6 +2,7 @@ import json
 import requests
 
 from datetime import datetime, timedelta, timezone
+from geopy.distance import distance
 
 import pandas as pd
 import numpy as np
@@ -63,7 +64,6 @@ def produce_stops(data: list, route: str) -> pd.DataFrame:
     
     # print request status for debugging
     request = requests.get(f"http://restbus.info/api/agencies/sf-muni/routes/{route}")
-    print(request)
 
     # obtain stop ordinals
     stops['ORD'] = stops['SID'].map({stop_meta['id']: ordinal
