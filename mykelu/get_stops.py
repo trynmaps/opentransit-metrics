@@ -91,63 +91,42 @@ def get_stops(dates, routes, directions = [], new_stops = [], timespan = ("00:00
     
     return bus_stops
 
-# a faster implementation of get_wait_times
-def get_wait_times(df, dates, timespan, group):
-    """
-    get_wait_times
+# find the smallest nonnegative waiting time
+def absmin(series):
+    return series[series >= 0].min()
+
+# # input: df with entries from one day
+# # possible optimzation: sort df by timestamp, then pick first timestamp > minute for each minute (need to time to make sure but should be faster)
+def minimum_waiting_times(df, start_time, end_time, group):
+    minute_range = [start_time + timedelta(minutes = i) for i in range((end_time - start_time).seconds//60)]
+    wait_times = pd.DataFrame(columns = [])
     
-    Description:
-        Takes a DataFrame containing stops for a given route/timespan and returns the corresponding waiting times in that timespan.
+    for minute in minute_range:
+        df['WAIT'] = df['timestamp'].apply(lambda x: (x - minute).total_seconds())
+        pivot = df[group + ['WAIT']].pivot_table(values = ['WAIT'], index = group, aggfunc = absmin)
+        pivot['TIME'] = minute
+        pivot = pivot.reset_index()
+        wait_times = wait_times.append(pivot, sort = True)
         
-    Parameters:
-        df: a DataFrame containing stop times for a given route/timespan/date interval.
-        dates: the range of dates over which to retrieve wait times.
-        timespan: the timespan to compute wait times for.
-        group: the columns to group over. Needed for sorting.
+    return wait_times
+
+def all_wait_times(df, timespan, group, aggfuncs):
+    dates = df['DATE'].unique()
+    avg_over_pd = pd.DataFrame(columns = group + ['DATE', 'TIME', 'WAIT'])
     
-    Returns:
-        wait_times: a DataFrame containing the waiting times over the given parameters.
-    """
-    print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: starting!")
+    for date in new_stops['DATE'].unique():
+        print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: start processing {date}.")
+        start_time = datetime.strptime(f"{date.isoformat()} {timespan[0]} -0800", "%Y-%m-%d %H:%M %z")
+        end_time   = datetime.strptime(f"{date.isoformat()} {timespan[1]} -0800", "%Y-%m-%d %H:%M %z")
+        daily_wait = minimum_waiting_times(new_stops[new_stops['DATE'] == date], start_time, end_time, group)
+        print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: found stops for {date}.")      
+        #daily_wait = daily_wait.pivot_table(values = ['WAIT'], index = group).reset_index()
+        daily_wait['DATE'] = date
+        daily_wait['TIME'] = daily_wait['TIME'].apply(lambda x: x.time())
+        avg_over_pd = avg_over_pd.append(daily_wait, sort = True)
     
-    # sort the DataFrame by time first
-    df = df.sort_values(['timestamp']).reset_index()
-    wait_times = pd.DataFrame(columns = [])      
-    filters = product(*[df[s].unique() for s in group])
-    filters = [{group[i]:filter[i] for i in range(len(group))} for filter in filters]
-          
-    # include day range, take from dates       
-    for filter in filters:
-        filtered_waits = pd.DataFrame(columns = [])
-        filtered_stops = df.loc[reduce((lambda x, y: x & y), [df.apply(lambda x: x[key] == filter[key], axis = 1) for key in filter.keys()]), :]
-        start_time = datetime.strptime(f"{filter['DATE'].isoformat()} {timespan[0]} -0800", "%Y-%m-%d %H:%M %z")
-        end_time   = datetime.strptime(f"{filter['DATE'].isoformat()} {timespan[1]} -0800", "%Y-%m-%d %H:%M %z")
-        minute_range = [start_time + timedelta(minutes = i) for i in range((end_time - start_time).seconds//60)]
-        current_index = 0
-
-        for minute in minute_range:
-            while current_index < len(filtered_stops):
-                if filtered_stops.iloc[current_index]['timestamp'] >= minute:
-                    break
-                else:
-                    current_index += 1
-                                       
-            # catches the case where current_stops = len(filtered_stops)
-            try:
-                filtered_waits = filtered_waits.append(filtered_stops.iloc[current_index])
-            except:
-                filtered_waits = filtered_waits.append(filtered_stops.iloc[-1])
-
-        filtered_waits.index = range(len(filtered_waits))
-        filtered_waits['MINUTE'] = pd.Series(minute_range)
-        wait_times = wait_times.append(filtered_waits)
-
-    wait_times['WAIT'] = wait_times.apply(lambda x: (x['timestamp'] - x['MINUTE']).total_seconds(), axis = 'columns')
-    wait_times.index = range(len(wait_times))
-    wait_times['MINUTE'] = wait_times['MINUTE'].apply(lambda x: x.time())
-    print(f"{datetime.now().strftime('%a %b %d %I:%M:%S %p')}: finishing!")
-    return wait_times[['MINUTE', 'WAIT'] + group]
-
+    return avg_over_pd
+    
 def quantiles(series):
     return [np.percentile(series, i) for i in [5, 25, 50, 75, 95]]
 

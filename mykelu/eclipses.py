@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import numpy as np
-from geopy.distance import distance
 
 from typing import List, Union
 
