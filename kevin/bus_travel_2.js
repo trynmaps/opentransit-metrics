@@ -24,6 +24,7 @@ function queryUrl(startTime, endTime, route){
                 vid
                 lat
                 lon
+                did
               }
             }
           }
@@ -40,9 +41,14 @@ var routeLine = L.layerGroup();
 var streetmap = L.tileLayer('https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png');
 var busDots = {};
 var busKeys = {};
+var ioKeys = {};
 var routePaths = {};
 var route;
 var t0;
+
+var inboundColor = 'green';
+var outboundColor = 'black';
+var doIOColors = true;
 
 var animLength = 10;
 
@@ -127,6 +133,7 @@ function loadBus(startTime, endTime, route, dedupKeys=false){
         stopLayer.clearLayers();
         routeLine.clearLayers();
         busKeys = {};
+        ioKeys = {};
         busDots = {};
         // Generate bus keyframes
         for (let rs of route){
@@ -134,9 +141,11 @@ function loadBus(startTime, endTime, route, dedupKeys=false){
             for (let v of rs.vehicles){
                 if (!(v.vid in busKeys)) {
                     busKeys[v.vid]=[];
+                    ioKeys[v.vid]=[];
                     // Add circles
                     let c = L.circle([v.lat,v.lon],
                         {color: 'black'});
+                        // {color: doIOColors?(v.did.indexOf('I')<0 ? outboundColor:inboundColor):'black'});
                     c.bindPopup(`<p>Bus # ${v.vid}</p>`)
                     c.addTo(busLayer);
                     busDots[v.vid]=c;
@@ -150,11 +159,14 @@ function loadBus(startTime, endTime, route, dedupKeys=false){
                     if (dedupKeys && lon0==lon1 && lat0==lat1) continue;
                 }
 
-                bk.push([timeTransform(rs.vtime),lon1,lat1]);
+                let t = timeTransform(rs.vtime)
+                bk.push([t,lon1,lat1]);
+                ioKeys[v.vid].push([t,v.did.indexOf('I')<0 ? 0:1,0])
             }
         }
 
         for (let s of stops){
+            console.log(s);
             L.circle([s.lat,s.lon],
                 {color: 'blue',
                 radius: 5,
@@ -204,6 +216,7 @@ function updateBuses(){
         let c = busDots[vid];
         let [lon,lat] = keyPath(busKeys[vid],time);
         c.setLatLng(new L.LatLng(lat,lon));
+        if (doIOColors) c.setStyle({color: keyPath(ioKeys[vid],time)[0] < .5 ? outboundColor:inboundColor});
     }
     
     if (looping && time > animLength) t0 = Date.now();
