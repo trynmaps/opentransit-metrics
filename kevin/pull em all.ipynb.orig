@@ -1,0 +1,497 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import requests\n",
+    "import numpy as np\n",
+    "import json\n",
+    "import math\n",
+    "from datetime import datetime\n",
+    "import time\n",
+    "import os"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def list_string(arr):\n",
+    "    return f\"{[*map(str,arr)]}\".replace(\"'\",'\"')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def get_some_times(route, dt_params=(2018,10,15,0,1,0), hours=20, per_hour=1):\n",
+    "    route_data=[]\n",
+    "    if type(route) != list:\n",
+    "        route = [route]\n",
+    "        \n",
+    "    per_hour=int(per_hour)\n",
+    "    timestamp=int(datetime(*dt_params).timestamp())*1000\n",
+    "    T0 = time.time()\n",
+    "    for i in range(hours*per_hour):\n",
+    "        t0=time.time()\n",
+    "        start_time = timestamp + i*36e5/per_hour\n",
+    "        end_time   = start_time + 36e5/per_hour\n",
+    "\n",
+    "        # added direction id to query, needed to obtain stops\n",
+    "        query = f\"\"\"{{\n",
+    "          trynState(agency: \"muni\", startTime: \"{start_time}\", endTime: \"{end_time}\", routes: {list_string(route)}) {{\n",
+    "            agency\n",
+    "            startTime\n",
+    "            routes {{\n",
+    "              rid\n",
+    "              stops {{\n",
+    "                sid\n",
+    "                name\n",
+    "                lat\n",
+    "                lon\n",
+    "              }}\n",
+    "              routeStates {{\n",
+    "                vtime\n",
+    "                vehicles {{\n",
+    "                  vid\n",
+    "                  lat\n",
+    "                  lon\n",
+    "                  heading\n",
+    "                  did\n",
+    "                }}\n",
+    "              }}\n",
+    "            }}\n",
+    "          }}\n",
+    "        }}\n",
+    "        \"\"\" # Braces need to be doubled for f-string\n",
+    "\n",
+    "        query_url = \"https://06o8rkohub.execute-api.us-west-2.amazonaws.com/dev/graphql?query=\"+query\n",
+    "        print('Getting data...',i)\n",
+    "        r = requests.get(query_url)\n",
+    "        print(f'That took {round(time.time()-t0,2)} seconds.')\n",
+    "\n",
+    "        data = json.loads(r.text)\n",
+    "        \n",
+    "        try:\n",
+    "            data['data']\n",
+    "        except KeyError:\n",
+    "            print(f\"Error for time range {startTime}-{endTime}.\")\n",
+    "        else:\n",
+    "            if len(data['data']['trynState']['routes']):\n",
+    "                route_data.extend(data['data']['trynState']['routes'])\n",
+    "<<<<<<< local\n",
+    "        except KeyError as err:\n",
+    "            print(f\"Keyerror on {route} at {dt_params} at {timestamp}: {err}\")\n",
+    "            print(f\"Query: {data}\")\n",
+    "        \n",
+    "=======\n",
+    ">>>>>>> remote\n",
+    "        \n",
+    "    r_sort = {}\n",
+    "    print('Final formatting...')\n",
+    "    for x in route_data:\n",
+    "        if x['rid'] not in r_sort.keys():\n",
+    "            r_sort[x['rid']] = {'rid':x['rid'],'routeStates':[],'stops':x['stops']}\n",
+    "        r_sort[x['rid']]['routeStates'].extend(sorted(x['routeStates'], key=lambda rs: int(rs['vtime'])))\n",
+    "    r_sort=list(r_sort.values())\n",
+    "    print('Done')\n",
+    "    print(f'That all took {round(time.time()-T0,2)} seconds.')\n",
+    "    return r_sort"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Testing main scraping function:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "metadata": {
+    "scrolled": false
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "<<<<<<< local <modified: >\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Getting data... 0\n",
+      "That took 6.56 seconds.\n",
+      "Getting data... 1\n",
+      "That took 4.28 seconds.\n",
+      "Final formatting...\n",
+      "Done\n",
+      "That all took 11.08 seconds.\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "=======\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Getting data... 0\n",
+      "That took 9.34 seconds.\n",
+      "Getting data... 1\n",
+      "That took 6.29 seconds.\n",
+      "Final formatting...\n",
+      "Done\n",
+      "That all took 15.74 seconds.\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      ">>>>>>> remote <modified: >\n"
+     ]
+    }
+   ],
+   "source": [
+    "a=get_some_times(['1','14','N','14X','12'],dt_params=(2018,10,15,12),hours=2)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "List of all routes (scraped from https://github.com/trynmaps/opentransit-map/blob/master/src/res/muniRoutes2.json)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "all_routes = [\"1\",\"2\",\"3\",\"5\",\"6\",\"7\",\"8\",\"9\",\"10\",\"12\",\"14\",\"18\",\"19\",\"21\",\"22\",\"23\",\"24\",\"25\",\"27\",\"28\",\"29\",\"30\",\"31\",\"33\",\"35\",\"36\",\"37\",\"38\",\"39\",\"41\",\"43\",\"44\",\"45\",\"47\",\"48\",\"49\",\"52\",\"54\",\"55\",\"56\",\"57\",\"66\",\"67\",\"88\",\"90\",\"91\",\"83X\",\"30X\",\"7R\",\"J\",\"N\",\"14R\",\"14X\",\"PH\",\"E\",\"38R\",\"82X\",\"81X\",\"T-OWL\",\"M-OWL\",\"7X\",\"N-OWL\",\"L-OWL\",\"76X\",\"9R\",\"C\",\"38AX\",\"38BX\",\"31BX\",\"1AX\",\"31AX\",\"1BX\",\"K-OWL\",\"F\",\"8AX\",\"8BX\",\"M\",\"L\",\"5R\",\"PM\",\"K/T\",\"NX\",\"28R\",\"BUS\"]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Get 24 hours of data in chunks (more than ~30 routes per call gives an error)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def get24all(dt_params=(2018,10,15,7)):\n",
+    "    result = []\n",
+    "    t0=time.time()\n",
+    "    # changing the query reduced the number of routes that it could handle before causing errors\n",
+    "    # divide up the routes into 4 sets of 21\n",
+    "    for i in range(4):\n",
+    "        print(f'Chunk {i+1} of 4:')\n",
+    "        result.extend(get_some_times(all_routes[i*21:(i+1)*21],dt_params,hours=24))\n",
+    "    print(f'Whole thing took {round(time.time()-t0,2)} seconds.')\n",
+    "    return result"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Change `dt_params` to whatever date you want. `(year,month,day,hour)`"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Chunk 1 of 4:\n",
+      "Getting data... 0\n",
+      "That took 3.26 seconds.\n",
+      "Getting data... 1\n",
+      "That took 9.12 seconds.\n",
+      "Getting data... 2\n",
+      "That took 13.53 seconds.\n",
+      "Getting data... 3\n",
+      "That took 3.93 seconds.\n",
+      "Getting data... 4\n",
+      "That took 3.95 seconds.\n",
+      "Getting data... 5\n",
+      "That took 6.75 seconds.\n",
+      "Getting data... 6\n",
+      "That took 6.95 seconds.\n",
+      "Getting data... 7\n",
+      "That took 7.57 seconds.\n",
+      "Getting data... 8\n",
+      "That took 6.15 seconds.\n",
+      "Getting data... 9\n",
+      "That took 7.62 seconds.\n",
+      "Getting data... 10\n",
+      "That took 7.35 seconds.\n",
+      "Getting data... 11\n",
+      "That took 7.44 seconds.\n",
+      "Getting data... 12\n",
+      "That took 5.76 seconds.\n",
+      "Getting data... 13\n",
+      "That took 7.37 seconds.\n",
+      "Getting data... 14\n",
+      "That took 26.8 seconds.\n",
+      "Getting data... 15\n",
+      "That took 10.94 seconds.\n",
+      "Getting data... 16\n",
+      "That took 7.85 seconds.\n",
+      "Getting data... 17\n",
+      "That took 8.01 seconds.\n",
+      "Getting data... 18\n",
+      "That took 7.98 seconds.\n",
+      "Getting data... 19\n",
+      "That took 6.75 seconds.\n",
+      "Getting data... 20\n",
+      "That took 10.97 seconds.\n",
+      "Getting data... 21\n",
+      "That took 10.42 seconds.\n",
+      "Getting data... 22\n",
+      "That took 5.8 seconds.\n",
+      "Getting data... 23\n",
+      "That took 10.06 seconds.\n",
+      "Final formatting...\n",
+      "Done\n",
+      "That all took 406.03 seconds.\n",
+      "Chunk 2 of 4:\n",
+      "Getting data... 0\n",
+      "That took 4.87 seconds.\n",
+      "Getting data... 1\n",
+      "That took 4.05 seconds.\n",
+      "Getting data... 2\n",
+      "That took 3.95 seconds.\n",
+      "Getting data... 3\n",
+      "That took 3.99 seconds.\n",
+      "Getting data... 4\n",
+      "That took 4.46 seconds.\n",
+      "Getting data... 5\n",
+      "That took 5.48 seconds.\n",
+      "Getting data... 6\n",
+      "That took 6.27 seconds.\n",
+      "Getting data... 7\n",
+      "That took 7.22 seconds.\n",
+      "Getting data... 8\n",
+      "That took 7.43 seconds.\n",
+      "Getting data... 9\n",
+      "That took 7.42 seconds.\n",
+      "Getting data... 10\n",
+      "That took 7.01 seconds.\n",
+      "Getting data... 11\n",
+      "That took 7.03 seconds.\n",
+      "Getting data... 12\n",
+      "That took 6.89 seconds.\n",
+      "Getting data... 13\n",
+      "That took 7.46 seconds.\n",
+      "Getting data... 14\n",
+      "That took 7.01 seconds.\n",
+      "Getting data... 15\n",
+      "That took 7.29 seconds.\n",
+      "Getting data... 16\n",
+      "That took 7.38 seconds.\n",
+      "Getting data... 17\n",
+      "That took 7.83 seconds.\n",
+      "Getting data... 18\n",
+      "That took 11.61 seconds.\n",
+      "Getting data... 19\n",
+      "That took 5.92 seconds.\n",
+      "Getting data... 20\n",
+      "That took 6.16 seconds.\n",
+      "Getting data... 21\n",
+      "That took 5.52 seconds.\n",
+      "Getting data... 22\n",
+      "That took 14.85 seconds.\n",
+      "Getting data... 23\n",
+      "That took 5.21 seconds.\n",
+      "Final formatting...\n",
+      "Done\n",
+      "That all took 169.36 seconds.\n",
+      "Chunk 3 of 4:\n",
+      "Getting data... 0\n",
+      "That took 4.32 seconds.\n",
+      "Getting data... 1\n",
+      "That took 3.72 seconds.\n",
+      "Getting data... 2\n",
+      "That took 3.91 seconds.\n",
+      "Getting data... 3\n",
+      "That took 4.27 seconds.\n",
+      "Getting data... 4\n",
+      "That took 5.16 seconds.\n",
+      "Getting data... 5\n",
+      "That took 4.89 seconds.\n",
+      "Getting data... 6\n",
+      "That took 8.54 seconds.\n",
+      "Getting data... 7\n",
+      "That took 7.5 seconds.\n",
+      "Getting data... 8\n",
+      "That took 6.64 seconds.\n",
+      "Getting data... 9\n",
+      "That took 6.5 seconds.\n",
+      "Getting data... 10\n",
+      "That took 5.76 seconds.\n",
+      "Getting data... 11\n",
+      "That took 5.82 seconds.\n",
+      "Getting data... 12\n",
+      "That took 5.91 seconds.\n",
+      "Getting data... 13\n",
+      "That took 5.85 seconds.\n",
+      "Getting data... 14\n",
+      "That took 4.48 seconds.\n",
+      "Getting data... 15\n",
+      "That took 6.45 seconds.\n",
+      "Getting data... 16\n",
+      "That took 68.09 seconds.\n",
+      "Getting data... 17\n",
+      "That took 7.36 seconds.\n",
+      "Getting data... 18\n",
+      "That took 6.68 seconds.\n",
+      "Getting data... 19\n",
+      "That took 5.58 seconds.\n",
+      "Getting data... 20\n",
+      "That took 5.12 seconds.\n",
+      "Getting data... 21\n",
+      "That took 4.63 seconds.\n",
+      "Getting data... 22\n",
+      "That took 4.7 seconds.\n",
+      "Getting data... 23\n",
+      "That took 5.41 seconds.\n",
+      "Final formatting...\n",
+      "Done\n",
+      "That all took 423.85 seconds.\n",
+      "Chunk 4 of 4:\n",
+      "Getting data... 0\n",
+      "That took 4.93 seconds.\n",
+      "Getting data... 1\n",
+      "That took 3.78 seconds.\n",
+      "Getting data... 2\n",
+      "That took 3.03 seconds.\n",
+      "Getting data... 3\n",
+      "That took 3.59 seconds.\n",
+      "Getting data... 4\n",
+      "That took 4.19 seconds.\n",
+      "Getting data... 5\n",
+      "That took 5.66 seconds.\n",
+      "Getting data... 6\n",
+      "That took 8.12 seconds.\n",
+      "Getting data... 7\n",
+      "That took 6.09 seconds.\n",
+      "Getting data... 8\n",
+      "That took 7.95 seconds.\n",
+      "Getting data... 9\n",
+      "That took 7.67 seconds.\n",
+      "Getting data... 10\n",
+      "That took 6.43 seconds.\n",
+      "Getting data... 11\n",
+      "That took 8.98 seconds.\n",
+      "Getting data... 12\n",
+      "That took 6.05 seconds.\n",
+      "Getting data... 13\n",
+      "That took 6.48 seconds.\n",
+      "Getting data... 14\n",
+      "That took 6.33 seconds.\n",
+      "Getting data... 15\n",
+      "That took 6.74 seconds.\n",
+      "Getting data... 16\n",
+      "That took 7.08 seconds.\n",
+      "Getting data... 17\n",
+      "That took 8.49 seconds.\n",
+      "Getting data... 18\n",
+      "That took 10.89 seconds.\n",
+      "Getting data... 19\n",
+      "That took 6.85 seconds.\n",
+      "Getting data... 20\n",
+      "That took 5.03 seconds.\n",
+      "Getting data... 21\n",
+      "That took 4.68 seconds.\n",
+      "Getting data... 22\n",
+      "That took 5.44 seconds.\n",
+      "Getting data... 23\n",
+      "That took 16.13 seconds.\n",
+      "Final formatting...\n",
+      "Done\n",
+      "That all took 163.89 seconds.\n",
+      "Whole thing took 1176.24 seconds.\n"
+     ]
+    }
+   ],
+   "source": [
+    "allofem=get24all(dt_params=(2018,10,15,0))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Dump data to json file. Here, the final output is 185 MB, and zips to 8 MB."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "with open ('routes24h20181015v2.json','w') as outfile:\n",
+    "    json.dump(allofem,outfile)\n",
+    "# Final output is 185 MB, zips to 8 MB."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python [default]",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.6.2"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
