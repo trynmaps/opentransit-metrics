@@ -166,7 +166,7 @@ function loadBus(startTime, endTime, route, dedupKeys=false){
         }
 
         for (let s of stops){
-            console.log(s);
+            // console.log(s);
             L.circle([s.lat,s.lon],
                 {color: 'blue',
                 radius: 5,
